@@ -93,7 +93,7 @@ void loop() {
       bodyTemp.writeValue(temperature);
       ecgCharacteristic.writeValue(ecg);
 
-      delay(1000);
+      delay(8);
     }
   } else {
     // turn off the LED
