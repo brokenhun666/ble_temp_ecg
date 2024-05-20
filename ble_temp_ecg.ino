@@ -1,24 +1,34 @@
 #include <ArduinoBLE.h>
-#include "Arduino_BMI270_BMM150.h"
 #include "ClosedCube_MAX30205.h"  // Temperature sensor's lib
 #include <SPI.h>
 #include "protocentral_Max30003.h" // ECG 3 Click's lib
 
+#define POWER_LED 6
+#define CONNECTION_LED 5
+
 ClosedCube_MAX30205 max30205; // Temperature sensor
 MAX30003 max30003; // ECG sensor
-// create service:
-BLEService tempService("00001809-0000-1000-8000-00805F9B34FB");
 
-BLEService ecgService("123e4567-e89b-12d3-a456-426614174000");
+BLEDevice central;
+// create service:
+BLEService tempService("00001809-0000-1000-8000-00805f9b34fb");
+
+BLEService ecgService("0000180d-0000-1000-8000-00805f9b34fb");
 
 // create characteristics and allow remote device to read and get notifications:
-BLEFloatCharacteristic bodyTemp("00002A1C-0000-1000-8000-00805F9B34FB", BLERead | BLEIndicate);
+BLEFloatCharacteristic bodyTemp("00002a1c-0000-1000-8000-00805f9b34fb", BLERead | BLEIndicate);
 
-BLEFloatCharacteristic ecgCharacteristic("123e4567-e89b-12d3-a456-426614174001", BLERead | BLENotify);
+BLEFloatCharacteristic ecgCharacteristic("00002a37-0000-1000-8000-00805f9b34fb", BLERead | BLENotify);
+
+float temperature;
+float lastTemperature = 0;
+float ecg;
 
 void setup() {
   Serial.begin(9600);
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(POWER_LED, OUTPUT);
+  pinMode(CONNECTION_LED, OUTPUT);
+  digitalWrite(POWER_LED, HIGH);
 
   // Initialize temp sensor
   max30205.begin(0x48);
@@ -51,8 +61,8 @@ void setup() {
   // set the local name that the peripheral advertises:
   BLE.setLocalName("BLE_Arduino");
   // set the UUID for the service:
-  BLE.setAdvertisedService(tempService);
-  BLE.setAdvertisedService(ecgService);
+  //BLE.setAdvertisedService(tempService);
+  //BLE.setAdvertisedService(ecgService);
 
   // add the characteristics to the service
   tempService.addCharacteristic(bodyTemp);
@@ -66,37 +76,38 @@ void setup() {
 }
 
 void loop() {
-  float temperature;
-  float ecg;
-  BLEDevice central = BLE.central();
-
+  central = BLE.central();
   // if a central is connected to the peripheral:
   if (central) {
     // print the central's BT address:
     Serial.print("Connected to central: ");
     Serial.println(central.address());
     // turn on LED to indicate connection:
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(CONNECTION_LED, HIGH);
     
     // while the central remains connected:
     while (central.connected()) {
       temperature = max30205.readTemperature(); // In Celsius
-      Serial.print(F("Temp="));
-      Serial.println(temperature, DEC);
+    
+      //Serial.print(F("Temp="));
+      //Serial.println(temperature, DEC);
 
       max30003.getEcgSamples();   //It reads the ecg sample and stores it to max30003.ecgdata
       ecg = max30003.ecgdata;
-      Serial.print("ECG: ");
+      //Serial.print("ECG: ");
       Serial.println(ecg);
       
       // write sensor values to service characteristics:
-      bodyTemp.writeValue(temperature);
+      if(abs(temperature - lastTemperature) >= 0.1 || lastTemperature == 0) {
+        lastTemperature = temperature;
+        bodyTemp.writeValue(temperature);
+      }
       ecgCharacteristic.writeValue(ecg);
 
       delay(8);
     }
   } else {
     // turn off the LED
-    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(CONNECTION_LED, LOW);
   }  
 }
